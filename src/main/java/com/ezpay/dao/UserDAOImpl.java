@@ -18,38 +18,64 @@ public class UserDAOImpl implements UserDAO {
     }
 
     @Override
-    public User save(User user) {
+    public User saveUser(User user) {
         return userRepository.save(user);
     }
 
     @Override
-    public Optional<User> findById(Long id) {
-        return userRepository.findById(id);
-    }
-
-    @Override
     public Optional<User> findByEmail(String email) {
-        return userRepository.findByEmailIgnoreCase(email);
+        return userRepository.findByEmail(email);
     }
 
     @Override
-    public List<User> findAll() {
-        return userRepository.findAll();
+    public Optional<User> findByMobile(String mobile) {
+        return userRepository.findByMobile(mobile);
     }
 
     @Override
-    public boolean emailExists(String email) {
-        return userRepository.countByEmailIgnoreCase(email) > 0;
+    public Optional<User> findByEmailOrMobile(String emailOrMobile) {
+        Optional<User> user = userRepository.findByEmail(emailOrMobile);
+
+        if (user.isPresent()) {
+            return user;
+        }
+
+        return userRepository.findByMobile(emailOrMobile);
     }
 
     @Override
-    public boolean mobileExists(String mobile) {
+    public Optional<User> findById(Long userId) {
+        return userRepository.findById(userId);
+    }
+
+    @Override
+    public Optional<User> findByResetToken(String resetToken) {
+        return userRepository.findByResetToken(resetToken);
+    }
+
+    @Override
+    public boolean existsByEmail(String email) {
+        return userRepository.countByEmail(email) > 0;
+    }
+
+    @Override
+    public boolean existsByMobile(String mobile) {
         return userRepository.countByMobile(mobile) > 0;
     }
 
     @Override
-    public void delete(User user) {
-        userRepository.delete(user);
+    public long countVerifiedUsers() {
+        return userRepository.countByOtpIsNull();
+    }
+
+    @Override
+    public List<User> findVerifiedUsers() {
+        return userRepository.findAllByOtpIsNull();
+    }
+
+    @Override
+    public void deleteById(Long userId) {
+        userRepository.deleteById(userId);
     }
 }
 

@@ -1,20 +1,26 @@
 package com.ezpay.controller;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.ezpay.entity.User;
 import com.ezpay.service.UserService;
 
 @RestController
 @RequestMapping("/api/users")
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = "http://localhost:5173")
 public class UserController {
 
     private final UserService userService;
@@ -24,35 +30,83 @@ public class UserController {
     }
 
     @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    public User register(@Valid @RequestBody User user) {
-        return userService.register(user);
+    public String registerUser(@RequestBody User user) {
+        return userService.registerUser(user);
+    }
+
+    @PostMapping("/verify-otp")
+    public String verifyOTP(@RequestBody User user) {
+        return userService.verifyOTP(user.getMobile(), user.getOtp());
     }
 
     @PostMapping("/login")
-    public User login(@Valid @RequestBody LoginRequest request) {
-        return userService.login(request.email(), request.password());
+    public Map<String, Object> loginUser(@RequestBody User user) {
+        User loggedInUser = userService.loginUser(
+                user.getEmail(),
+                user.getPassword()
+        );
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("userId", loggedInUser.getUserId());
+        response.put("name", loggedInUser.getName());
+        response.put("email", loggedInUser.getEmail());
+        response.put("mobile", loggedInUser.getMobile());
+
+        return response;
     }
 
-    @GetMapping("/{id}")
-    public User getUser(@PathVariable Long id) {
-        return userService.getUser(id);
+    @GetMapping("/count")
+    public Map<String, Long> getVerifiedUserCount() {
+        return Map.of(
+                "verifiedUserCount",
+                userService.getVerifiedUserCount()
+        );
     }
 
-    @GetMapping
-    public List<User> getAllUsers() {
-        return userService.getAllUsers();
+    @GetMapping("/verified")
+    public List<Map<String, Object>> getVerifiedUsers() {
+        List<Map<String, Object>> response = new ArrayList<>();
+
+        for (User user : userService.getVerifiedUsers()) {
+            Map<String, Object> account = new LinkedHashMap<>();
+            account.put("userId", user.getUserId());
+            account.put("name", user.getName());
+            account.put("email", user.getEmail());
+            account.put("mobile", user.getMobile());
+            response.add(account);
+        }
+
+        return response;
     }
 
-    @PutMapping("/{id}")
-    public User updateProfile(
-            @PathVariable Long id,
+    @PutMapping("/{userId}/profile")
+    public String updateProfile(
+            @PathVariable Long userId,
             @RequestBody User user) {
-        return userService.updateProfile(id, user);
+
+        return userService.updateProfile(
+                userId,
+                user.getName(),
+                user.getAddress(),
+                user.getProfilePicture()
+        );
     }
 
-    public record LoginRequest(
-            @NotBlank @Email String email,
-            @NotBlank String password) {
+    @DeleteMapping("/{userId}")
+    public String deleteUser(@PathVariable Long userId) {
+        return userService.deleteUser(userId);
+    }
+
+    @PostMapping("/forgot-password")
+    public String forgotPassword(@RequestBody User user) {
+        return userService.forgotPassword(user.getEmail());
+    }
+
+    @PostMapping("/reset-password/{token}")
+    public String resetPassword(
+            @PathVariable String token,
+            @RequestBody User user) {
+
+        return userService.resetPassword(token, user.getPassword());
     }
 }

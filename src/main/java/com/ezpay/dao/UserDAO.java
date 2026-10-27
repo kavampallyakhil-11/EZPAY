@@ -7,17 +7,27 @@ import com.ezpay.entity.User;
 
 public interface UserDAO {
 
-    User save(User user);
-
-    Optional<User> findById(Long id);
+    User saveUser(User user);
 
     Optional<User> findByEmail(String email);
 
-    List<User> findAll();
+    Optional<User> findByMobile(String mobile);
 
-    boolean emailExists(String email);
+    Optional<User> findByEmailOrMobile(String emailOrMobile);
 
-    boolean mobileExists(String mobile);
+    Optional<User> findById(Long userId);
 
-    void delete(User user);
+    Optional<User> findByResetToken(String resetToken);
+
+    boolean existsByEmail(String email);
+
+    boolean existsByMobile(String mobile);
+
+    long countVerifiedUsers();
+
+    List<User> findVerifiedUsers();
+
+    void deleteById(Long userId);
+
+	
 }

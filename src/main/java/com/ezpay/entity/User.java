@@ -1,63 +1,96 @@
 package com.ezpay.entity;
 
+import java.time.LocalDateTime;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 @Entity
-@Table(name = "EZPAY_USERS")
+@Table(name = "USERS")
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "ezpay_user_generator")
+    @GeneratedValue(
+        strategy = GenerationType.SEQUENCE,
+        generator = "users_seq_generator"
+    )
     @SequenceGenerator(
-        name = "ezpay_user_generator",
-        sequenceName = "EZPAY_USER_SEQ",
+        name = "users_seq_generator",
+        sequenceName = "USERS_SEQ",
         allocationSize = 1
     )
-    private Long id;
+    @Column(name = "USER_ID")
+    private Long userId;
 
-    @NotBlank
-    @Size(max = 100)
-    @Column(name = "FULL_NAME", nullable = false, length = 100)
-    private String fullName;
+    @Column(name = "NAME", nullable = false)
+    private String name;
 
-    @NotBlank
-    @Email
-    @Size(max = 150)
-    @Column(name = "EMAIL", nullable = false, unique = true, length = 150)
+    @Column(name = "EMAIL", nullable = false, unique = true)
     private String email;
 
-    @NotBlank
-    @Size(max = 20)
-    @Column(name = "MOBILE", nullable = false, unique = true, length = 20)
+    @Column(name = "MOBILE", nullable = false, unique = true)
     private String mobile;
 
-    @NotBlank
-    @Size(min = 8, max = 72)
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    @Column(name = "PASSWORD_HASH", nullable = false, length = 100)
+    @Column(name = "PASSWORD", nullable = false)
     private String password;
+
+    @Column(name = "ADDRESS")
+    private String address;
+
+    @Column(name = "PROFILE_PICTURE")
+    private String profilePicture;
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Column(name = "OTP")
+    private String otp;
+
+    @Column(name = "OTP_EXPIRY")
+    private LocalDateTime otpExpiry;
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Column(name = "RESET_TOKEN")
+    private String resetToken;
+
+    @Column(name = "RESET_TOKEN_EXPIRY")
+    private LocalDateTime resetTokenExpiry;
+
+    @Column(name = "CREATED_AT")
+    private LocalDateTime createdAt;
+
+    @Column(name = "UPDATED_AT")
+    private LocalDateTime updatedAt;
 
     public User() {
     }
 
-    public Long getId() {
-        return id;
+    @PrePersist
+    public void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    @PreUpdate
+    public void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 
-    public String getFullName() {
-        return fullName;
+    public Long getUserId() {
+        return userId;
     }
 
-    public void setFullName(String fullName) {
-        this.fullName = fullName;
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public String getEmail() {
@@ -82,5 +115,69 @@ public class User {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public String getProfilePicture() {
+        return profilePicture;
+    }
+
+    public void setProfilePicture(String profilePicture) {
+        this.profilePicture = profilePicture;
+    }
+
+    public String getOtp() {
+        return otp;
+    }
+
+    public void setOtp(String otp) {
+        this.otp = otp;
+    }
+
+    public LocalDateTime getOtpExpiry() {
+        return otpExpiry;
+    }
+
+    public void setOtpExpiry(LocalDateTime otpExpiry) {
+        this.otpExpiry = otpExpiry;
+    }
+
+    public String getResetToken() {
+        return resetToken;
+    }
+
+    public void setResetToken(String resetToken) {
+        this.resetToken = resetToken;
+    }
+
+    public LocalDateTime getResetTokenExpiry() {
+        return resetTokenExpiry;
+    }
+
+    public void setResetTokenExpiry(LocalDateTime resetTokenExpiry) {
+        this.resetTokenExpiry = resetTokenExpiry;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

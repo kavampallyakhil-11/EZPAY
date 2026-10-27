@@ -1,10 +1,12 @@
 package com.ezpay.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,7 +19,8 @@ import com.ezpay.entity.User;
 @Service
 public class UserService {
 
-    private static final Logger logger = LogManager.getLogger(UserService.class);
+    private static final Logger logger =
+            LoggerFactory.getLogger(UserService.class);
 
     private final UserDAO userDAO;
     private final BCryptPasswordEncoder passwordEncoder =
@@ -27,97 +30,226 @@ public class UserService {
         this.userDAO = userDAO;
     }
 
+    // USER STORY 1.1: Registration
     @Transactional
-    public User register(User user) {
-        String email = normalizeEmail(user.getEmail());
-        String mobile = user.getMobile().trim();
+    public String registerUser(User user) {
+        logger.info("Registration request received for email: {}",
+                user.getEmail());
 
-        if (userDAO.emailExists(email)) {
-            logger.warn("Registration rejected: email already exists");
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Email is already registered");
+        if (userDAO.existsByEmail(user.getEmail())) {
+            logger.warn("Registration failed - email already registered");
+            return "Email already registered";
         }
 
-        if (userDAO.mobileExists(mobile)) {
-            logger.warn("Registration rejected: mobile already exists");
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Mobile number is already registered");
+        if (userDAO.existsByMobile(user.getMobile())) {
+            logger.warn("Registration failed - mobile already registered");
+            return "Mobile number already registered";
         }
 
-        user.setId(null);
-        user.setFullName(user.getFullName().trim());
-        user.setEmail(email);
-        user.setMobile(mobile);
+        String otp = String.valueOf(
+                100000 + new java.security.SecureRandom().nextInt(900000));
+
         user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setOtp(otp);
+        user.setOtpExpiry(LocalDateTime.now().plusMinutes(5));
 
-        User savedUser = userDAO.save(user);
-        logger.info("User registered; userId={}", savedUser.getId());
+        userDAO.saveUser(user);
 
-        return savedUser;
+        logger.info("User registered successfully for email: {}",
+                user.getEmail());
+
+        // Local testing only: the frontend displays this OTP in the browser.
+        return "Registration successful. For local testing, your OTP is: "
+                + otp;
     }
 
-    public User login(String email, String rawPassword) {
-        User user = userDAO.findByEmail(normalizeEmail(email))
-                .orElseThrow(() -> {
-                    logger.warn("Login failed: account not found");
-                    return new ResponseStatusException(
-                            HttpStatus.UNAUTHORIZED,
-                            "Invalid email or password");
-                });
+    // USER STORY 1.1: OTP verification
+    @Transactional
+    public String verifyOTP(String mobile, String otp) {
+        logger.info("OTP verification request received");
 
-        if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
-            logger.warn("Login failed: password mismatch; userId={}", user.getId());
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Invalid email or password");
+        Optional<User> optionalUser = userDAO.findByMobile(mobile);
+
+        if (optionalUser.isEmpty()) {
+            logger.warn("OTP verification failed - user not found");
+            return "User not found";
         }
 
-        logger.info("Login credentials validated; userId={}", user.getId());
+        User user = optionalUser.get();
+
+        if (user.getOtp() == null || !user.getOtp().equals(otp)) {
+            logger.warn("OTP verification failed - invalid OTP");
+            return "Invalid OTP";
+        }
+
+        if (user.getOtpExpiry() == null
+                || user.getOtpExpiry().isBefore(LocalDateTime.now())) {
+            logger.warn("OTP verification failed - OTP expired");
+            return "OTP expired";
+        }
+
+        user.setOtp(null);
+        user.setOtpExpiry(null);
+        userDAO.saveUser(user);
+
+        logger.info("OTP verified successfully for user ID: {}",
+                user.getUserId());
+
+        return "Account verified successfully";
+    }
+
+    // USER STORY 1.1: Login
+    public User loginUser(String emailOrMobile, String password) {
+        logger.info("Login request received");
+
+        User user = userDAO.findByEmailOrMobile(emailOrMobile)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Invalid email/mobile or password"
+                ));
+
+        if (user.getOtp() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Please verify your OTP before logging in"
+            );
+        }
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            logger.warn("Login failed - invalid password for user ID: {}",
+                    user.getUserId());
+
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid email/mobile or password"
+            );
+        }
+
+        logger.info("Login successful for user ID: {}", user.getUserId());
         return user;
     }
 
-    public User getUser(Long id) {
-        return userDAO.findById(id)
-                .orElseThrow(() -> {
-                    logger.warn("User not found; userId={}", id);
-                    return new ResponseStatusException(
-                            HttpStatus.NOT_FOUND, "User not found");
-                });
-    }
-
-    public List<User> getAllUsers() {
-        logger.info("Retrieving users");
-        return userDAO.findAll();
-    }
-
+    // USER STORY 1.2: Profile management
     @Transactional
-    public User updateProfile(Long id, User request) {
-        User existingUser = getUser(id);
-        String newMobile = request.getMobile().trim();
+    public String updateProfile(
+            Long userId,
+            String name,
+            String address,
+            String profilePicture) {
 
-        if (!existingUser.getMobile().equals(newMobile)
-                && userDAO.mobileExists(newMobile)) {
-            logger.warn("Profile update rejected: mobile already exists; userId={}", id);
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Mobile number is already registered");
+        logger.info("Profile update request received for user ID: {}", userId);
+
+        Optional<User> optionalUser = userDAO.findById(userId);
+
+        if (optionalUser.isEmpty()) {
+            logger.warn("Profile update failed - user not found: {}", userId);
+            return "User not found";
         }
 
-        existingUser.setFullName(request.getFullName().trim());
-        existingUser.setMobile(newMobile);
+        User user = optionalUser.get();
 
-        User updatedUser = userDAO.save(existingUser);
-        logger.info("Profile updated; userId={}", id);
+        if (name != null && !name.isBlank()) {
+            user.setName(name.trim());
+        }
 
-        return updatedUser;
+        if (address != null) {
+            user.setAddress(address.trim());
+        }
+
+        if (profilePicture != null) {
+            user.setProfilePicture(profilePicture.trim());
+        }
+
+        userDAO.saveUser(user);
+
+        logger.info("Profile updated successfully for user ID: {}", userId);
+        return "Profile updated successfully";
     }
 
-    private String normalizeEmail(String email) {
-        if (email == null || email.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Email is required");
+    // DASHBOARD: count of users who verified their OTP
+    @Transactional(readOnly = true)
+    public long getVerifiedUserCount() {
+        return userDAO.countVerifiedUsers();
+    }
+
+    // DASHBOARD: list of users who verified their OTP
+    @Transactional(readOnly = true)
+    public List<User> getVerifiedUsers() {
+        return userDAO.findVerifiedUsers();
+    }
+
+    // USER MANAGEMENT: delete a user account
+    @Transactional
+    public String deleteUser(Long userId) {
+        logger.info("Delete request received for user ID: {}", userId);
+
+        User user = userDAO.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        userDAO.deleteById(user.getUserId());
+
+        logger.info("User account deleted for user ID: {}", userId);
+        return "User deleted successfully";
+    }
+
+    // USER STORY 1.3: Forgot password
+    @Transactional
+    public String forgotPassword(String emailOrMobile) {
+        logger.info("Forgot password request received");
+
+        Optional<User> optionalUser =
+                userDAO.findByEmailOrMobile(emailOrMobile);
+
+        if (optionalUser.isEmpty()) {
+            logger.warn("Forgot password request for an unregistered account");
+            return "Email or mobile number not registered";
         }
 
-        return email.trim().toLowerCase(Locale.ROOT);
+        User user = optionalUser.get();
+        String token = UUID.randomUUID().toString();
+
+        user.setResetToken(token);
+        user.setResetTokenExpiry(LocalDateTime.now().plusMinutes(15));
+        userDAO.saveUser(user);
+
+        // Configure email or SMS delivery to send a reset link containing the token.
+        logger.info("Password reset token generated for user ID: {}",
+                user.getUserId());
+
+        return "Password reset token generated. Configure email/SMS delivery to send it.";
+    }
+
+    // USER STORY 1.3: Reset password
+    @Transactional
+    public String resetPassword(String token, String newPassword) {
+        logger.info("Password reset request received");
+
+        Optional<User> optionalUser = userDAO.findByResetToken(token);
+
+        if (optionalUser.isEmpty()) {
+            logger.warn("Password reset failed - invalid reset token");
+            return "Invalid reset token";
+        }
+
+        User user = optionalUser.get();
+
+        if (user.getResetTokenExpiry() == null
+                || user.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
+            logger.warn("Password reset failed - reset token expired");
+            return "Reset token expired";
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setResetToken(null);
+        user.setResetTokenExpiry(null);
+        userDAO.saveUser(user);
+
+        logger.info("Password updated successfully for user ID: {}",
+                user.getUserId());
+
+        return "Password updated successfully";
     }
 }
